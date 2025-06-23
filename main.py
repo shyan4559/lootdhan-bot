@@ -2,7 +2,7 @@ import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-BOT_TOKEN = "7580790063:AAEcmPhLSIWtY-6nj7rlqER7LlRuzaIdt44"
+BOT_TOKEN = "7580790063:AAHzPvD1BOemVkufRLNI8svr4Rcc4cPNbS8"
 ADMIN_ID = 6393057518
 MIN_WITHDRAW = 10
 REF_BONUS = 5
