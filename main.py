@@ -1,100 +1,108 @@
-> Earner:
-# LootDhan Telegram Bot - Inline Keyboard Version
-
+import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
-import json, os
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# Load or initialize users data
-USERS_FILE = 'users.json'
-if os.path.exists(USERS_FILE):
-    with open(USERS_FILE, 'r') as f:
-        users = json.load(f)
-else:
-    users = {}
+BOT_TOKEN = "7580790063:AAEcmPhLSIWtY-6nj7rlqER7LlRuzaIdt44"
+ADMIN_ID = 6393057518
+MIN_WITHDRAW = 10
+REF_BONUS = 5
+DB_FILE = "users.json"
 
-def save_users():
-    with open(USERS_FILE, 'w') as f:
+# Load or initialize users database
+def load_users():
+    try:
+        with open(DB_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_users(users):
+    with open(DB_FILE, "w") as f:
         json.dump(users, f)
 
-# ✅ Your admin Telegram ID
-ADMIN_ID = 6393057518
-BOT_TOKEN = "7580790063:AAEcmPhLSIWtY-6nj7rlqER7LlRuzaIdt44"
+users = load_users()
 
-# Inline button layout
-keyboard = [
-    [InlineKeyboardButton("💰 Tasks", callback_data='tasks'), InlineKeyboardButton("👥 Refer", callback_data='refer')],
-    [InlineKeyboardButton("🎁 Daily Bonus", callback_data='bonus'), InlineKeyboardButton("📺 Watch & Earn", callback_data='watch')],
-    [InlineKeyboardButton("📢 Join & Earn", callback_data='join'), InlineKeyboardButton("📊 My Balance", callback_data='balance')],
-    [InlineKeyboardButton("💸 Withdraw", callback_data='withdraw')],
-    [InlineKeyboardButton("🔗 Complete Task", callback_data='complete_task')]
-]
+def get_user(user_id):
+    if str(user_id) not in users:
+        users[str(user_id)] = {"balance": 0, "ref_by": None}
+    return users[str(user_id)]
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = str(update.effective_user.id)
-    if user_id not in users:
-        users[user_id] = {
-            "balance": 0,
-            "ref": update.message.text.split(" ")[1] if len(update.message.text.split(" ")) > 1 else None,
-            "has_spun": False
-        }
-        ref_id = users[user_id]['ref']
-        if ref_id and ref_id in users:
-            users[ref_id]['balance'] += 5
-    save_users()
+    user = update.effective_user
+    uid = user.id
+    args = context.args
+
+    u = get_user(uid)
+    if args:
+        ref = args[0]
+        if u["ref_by"] is None and ref != str(uid):
+            u["ref_by"] = ref
+            ref_user = get_user(ref)
+            ref_user["balance"] += REF_BONUS
+            await context.bot.send_message(chat_id=int(ref), text=f"🎉 You earned ₹{REF_BONUS} for referring {user.first_name}!")
+
+    save_users(users)
+
+    keyboard = [
+        [InlineKeyboardButton("💰 Tasks", callback_data="tasks"),
+         InlineKeyboardButton("👥 Refer", callback_data="refer")],
+        [InlineKeyboardButton("🎁 Daily Bonus", callback_data="bonus"),
+         InlineKeyboardButton("📺 Watch & Earn", callback_data="watch")],
+        [InlineKeyboardButton("📢 Join & Earn", callback_data="join"),
+         InlineKeyboardButton("📊 My Balance", callback_data="balance")],
+        [InlineKeyboardButton("💸 Withdraw", callback_data="withdraw")]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("👋 Welcome to LootDhan Bot!\nChoose an option below 👇", reply_markup=reply_markup)
+
+    await update.message.reply_text("👋 Welcome to LootDhan Bot!\n\nChoose an option below 👇", reply_markup=reply_markup)
 
 async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    user_id = str(query.from_user.id)
     await query.answer()
+    uid = query.from_user.id
+    u = get_user(uid)
 
-    if query.data == 'tasks':
-        await query.edit_message_text("📋 Task:\n1. Join @SamTheEarnerTeam\n2. Screenshot & send to admin\n💰 Reward: ₹3")
-    elif query.data == 'refer':
-        await query.edit_message_text(f"👥 Refer & Earn ₹5!\nShare this link:\nt.me/LootDhanBot?start={user_id}")
-    elif query.data == 'bonus':
-        if not users[user_id].get("has_spun"):
-            users[user_id]['balance'] += 2
-            users[user_id]['has_spun'] = True
-            save_users()
-            await query.edit_message_text("🎉 You got ₹2 Daily Bonus!")
+    if query.data == "tasks":
+        await query.edit_message_text("💼 Current Tasks:\n- Follow channel: @Samtheearnerteam\n- Earn ₹2 per task completed!")
+    elif query.data == "refer":
+        ref_link = f"https://t.me/LootDhanBot?start={uid}"
+        await query.edit_message_text(f"👥 Refer friends and earn ₹{REF_BONUS}!\nYour link: {ref_link}")
+    elif query.data == "bonus":
+        u["balance"] += 1
+        save_users(users)
+        await query.edit_message_text("🎁 You received ₹1 daily bonus!")
+    elif query.data == "watch":
+        u["balance"] += 2
+        save_users(users)
+        await query.edit_message_text("📺 You watched an ad and earned ₹2!")
+    elif query.data == "join":
+        u["balance"] += 1
+        save_users(users)
+        await query.edit_message_text("📢 You earned ₹1 for joining our sponsor channel!")
+    elif query.data == "balance":
+        await query.edit_message_text(f"💰 Your current balance: ₹{u['balance']}")
+    elif query.data == "withdraw":
+        if u["balance"] >= MIN_WITHDRAW:
+            await query.edit_message_text("💸 Enter your UPI ID to receive ₹10 (Simulation only)")
+            u["balance"] -= MIN_WITHDRAW
+            save_users(users)
         else:
-            await query.edit_message_text("⚠️ You already claimed your daily bonus today.")
-    elif query.data == 'watch':
-        await query.edit_message_text("📺 Watch & Earn is coming soon!")
-    elif query.data == 'join':
-        await query.edit_message_text("📢 Join & Earn:\nJoin our channel @SamTheEarnerTeam and send screenshot to admin. Reward: ₹2")
-    elif query.data == 'balance':
-        bal = users.get(user_id, {}).get("balance", 0)
-        await query.edit_message_text(f"📊 Your balance is ₹{bal}")
-    elif query.data == 'withdraw':
-        if users[user_id]['balance'] >= 10:
-            users[user_id]['balance'] -= 10
-            save_users()
-            await query.edit_message_text("✅ Withdrawal request sent to admin. You’ll receive ₹10 soon via UPI.")
-        else:
-            await query.edit_message_text("❌ You need at least ₹10 to withdraw.")
-    elif query.data == 'complete_task':
-        await query.edit_message_text("✅ Complete this offer to earn 1000 coins!")
+            await query.edit_message_text(f"❌ Minimum withdrawal is ₹{MIN_WITHDRAW}. Your balance is ₹{u['balance']}")
 
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("Unauthorized")
         return
-    total_users = len(users)
-    await update.message.reply_text(f"👑 Admin Panel 👑\nTotal Users: {total_users}")
-
-# Setup
-app = ApplicationBuilder().token(BOT_TOKEN).build()
-
-> Earner:
-# Handlers
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("admin", admin))
-app.add_handler(CallbackQueryHandler(handle_buttons))
-
-if __name__ == '__main__':
-    print("Bot is starting...")
+    text = "👮 Admin Panel\n\n"
+    total = len(users)
+    total_bal = sum(u["balance"] for u in users.values())
+    text += f"👤 Total users: {total}\n💰 Total balance across users: ₹{total_bal}"
+    await update.message.reply_text(text)
+def main():
+    app = Application.builder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(handle_buttons))
+    app.add_handler(CommandHandler("admin", admin))
     app.run_polling()
+
+if __name__ == "__main__":
+    main()
