@@ -5,6 +5,7 @@ COPY . /app
 
 RUN pip install python-telegram-bot==20.3
 
-ENV RENDER=true  # This tells Render to not look for a web port
+# Tell Render to not expect an open port
+ENV RENDER=true
 
 CMD ["python", "main.py"]
